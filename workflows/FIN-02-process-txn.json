@@ -1,0 +1,1831 @@
+{
+  "name": "FIN-02 Process Txn",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -720,
+        -144
+      ],
+      "id": "8beb3c27-29c9-4657-b9c7-17e64c36868d",
+      "name": "Start"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n \"allowed_user_ids\": [111111111, 222222222],\n \"group_chat_id\": -1001234567890,\n \"admin_chat_id\": 111111111,\n \"spreadsheet_id\": \"YOUR_SPREADSHEET_ID\",\n \"model_default\": \"claude-haiku-5-5\",\n \"model_fallback\": \"claude-sonnet-5-5\",\n \"categories\": [\"Makanan & Minuman\", \"Belanja Harian\", \"Transport\", \"Tagihan & Utilitas\",\n \"Rumah Tangga\", \"Kesehatan\", \"Pendidikan\", \"Hiburan\", \"Keluarga & Sosial\",\n \"Cicilan & Hutang\", \"Tabungan & Investasi\", \"Pendapatan\", \"Lainnya\"]\n}",
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -528,
+        -144
+      ],
+      "id": "8b4790b0-485f-4d9f-94d6-de37be3b5613",
+      "name": "Config"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "da5140de-8241-48f4-8103-9b923e9dcf8c",
+              "name": "model",
+              "value": "={{ $json.model || $json.model_default }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -304,
+        64
+      ],
+      "id": "ebcebb71-740d-4ba3-bce4-74170f5eba64",
+      "name": "Set Model"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7699a3c6-0600-4f87-bc3b-4b62e43f5441",
+              "leftValue": "={{ $json.kind }}",
+              "rightValue": "image",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -304,
+        272
+      ],
+      "id": "65f24a85-f22e-4ceb-a549-1bbd0d80663d",
+      "name": "Is Image?"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.file_id }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -224,
+        480
+      ],
+      "id": "9271bb95-16ce-4960-923c-e46d826d9bd7",
+      "name": "Get Image",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/files/images/{{ $('Set Model').first().json.update_id }}.jpg",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        464
+      ],
+      "id": "2b7ac5d5-3fd1-4a0c-be8a-80f3d2090405",
+      "name": "Save Image",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $('Set Model').first().json;\nconst today = DateTime.now().setZone('Asia/Makassar').toFormat('yyyy-MM-dd');\nconst SYSTEM = `You extract ONE financial transaction from an Indonesian payment screenshot (bank transfer, e-wallet, QRIS, receipt) or from a short text message. Return ONLY a JSON object. No markdown.\n\n{\n  \"is_transaction\": true or false,\n  \"type\": \"expense\" or \"income\",\n  \"amount\": integer rupiah, no dots, commas or \"Rp\",\n  \"date\": \"YYYY-MM-DD\",\n  \"merchant\": short name of the shop or recipient,\n  \"category\": exactly one value from the category list,\n  \"notes\": short remarks (include the user's caption or text remarks),\n  \"ref_no\": reference or transaction number if visible, else \"\",\n  \"confidence\": number between 0 and 1\n}\n\nRules:\n- Indonesian numbers: \"1.250.000,00\" means 1250000. \"25rb\" or \"25k\" means 25000. \"1,5jt\" means 1500000.\n- amount is the total debited or received, including fees. Use the TOTAL, not a line item.\n- Resolve relative dates (\"kemarin\", \"tadi pagi\") from the date given in the user message. If no date appears anywhere, use the date given in the user message.\n- Money received (incoming transfer, salary) is type \"income\", category \"Pendapatan\".\n- A transfer to a person with no shop context is \"Keluarga & Sosial\" unless the caption says otherwise.\n- The user's caption or text always overrides your guess for category and notes.\n- If the image is not a payment proof, or the amount cannot be read: is_transaction false, confidence 0.\n- Lower the confidence when the amount or date is blurry, cropped or ambiguous.\n\nCategory list: Makanan & Minuman, Belanja Harian, Transport, Tagihan & Utilitas, Rumah Tangga, Kesehatan, Pendidikan, Hiburan, Keluarga & Sosial, Cicilan & Hutang, Tabungan & Investasi, Pendapatan, Lainnya`;\nconst content = [];\nif (j.kind === 'image') {\n  const buf = await this.helpers.getBinaryDataBuffer(0, 'data');\n  content.push({ type: 'image', source: { type: 'base64', media_type: j.mime || 'image/jpeg',\n                                          data: buf.toString('base64') } });\n  content.push({ type: 'text', text: `Today is ${today}. Caption from user: \"${j.caption || ''}\"` });\n} else {\n  content.push({ type: 'text', text: `Today is ${today}. Message from user: \"${j.text}\"` });\n}\nreturn [{ json: { body: {\n  model: j.model || j.model_default || 'claude-haiku-5-5',\n  max_tokens: 700, system: SYSTEM,\n  messages: [{ role: 'user', content }] } } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        80
+      ],
+      "id": "514904f7-c271-47a3-8ea8-d40168722348",
+      "name": "Build Request"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        208,
+        80
+      ],
+      "id": "797341f5-90bd-4baa-a80e-9ec392f74fc1",
+      "name": "Call Claude",
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "httpHeaderAuth"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $json;\nconst ctx = $('Set Model').first().json;\nconst cats = ctx.categories;\nconst now = DateTime.now().setZone('Asia/Makassar');\nconst text = (r.content || []).filter(b => b.type === 'text').map(b => b.text).join('');\nlet d = null;\ntry { d = JSON.parse(text.replace(/```json|```/g, '').trim()); } catch (e) { d = null; }\nif (!d) return [{ json: { ...ctx, ok: false, errs: ['bad_json'], d: null, conf: 0 } }];\nconst errs = [];\nif (!Number.isInteger(d.amount) || d.amount <= 0) errs.push('amount');\nif (!['expense', 'income'].includes(d.type)) errs.push('type');\nif (!cats.includes(d.category)) d.category = 'Lainnya';\nconst dt = DateTime.fromISO(d.date || '', { zone: 'Asia/Makassar' });\nif (!dt.isValid || dt > now.plus({ days: 1 }) || dt < now.minus({ days: 400 })) {\n d.date = now.toISODate(); errs.push('date_fixed');\n}\nconst conf = Number(d.confidence ?? 0);\nconst ok = d.is_transaction !== false && !errs.includes('amount') && !errs.includes('type') && conf >= 0.75;\nconst txn_id = Date.now().toString(36).slice(-5).toUpperCase();\nconst image_path = ctx.kind === 'image' ? `/files/images/${ctx.update_id}.jpg` : '';\nreturn [{ json: { ...ctx, ok, errs, d, conf, txn_id, image_path } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        64
+      ],
+      "id": "6914d736-2733-4252-a28c-770a6c881d09",
+      "name": "Parse and Validate"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6bce99a7-1e4d-4a7e-badc-220f0efcdb00",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        704,
+        64
+      ],
+      "id": "a64a4e89-be73-495c-9129-03191959722c",
+      "name": "OK?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5a6977b7-4d07-4068-97c0-ff0b1fd937e6",
+              "leftValue": "={{ $json.model !== $json.model_fallback }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        960,
+        80
+      ],
+      "id": "33b23b63-4d13-4441-958a-dc97d1647003",
+      "name": "Can Escalate?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f7e8c1d7-6abb-498f-8410-1c8d568a2dfb",
+              "name": "model",
+              "value": "={{ $json.model_fallback }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -96,
+        -400
+      ],
+      "id": "61e742b4-d888-47cd-9d39-0df34f26bb8a",
+      "name": "Switch to Sonnet"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cb672917-603a-482c-ac49-3107e3c40737",
+              "leftValue": "={{ $json.readable }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1184,
+        288
+      ],
+      "id": "8649f49e-b7ca-4760-ad11-044be13b3120",
+      "name": "Is Readable?"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_ME",
+          "mode": "list",
+          "cachedResultName": "fin_confirm"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "conf_id": "={{ $json.conf_id }}",
+            "payload": "={{ $json.payload_str }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "conf_id",
+              "displayName": "conf_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "payload",
+              "displayName": "payload",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1216,
+        96
+      ],
+      "id": "3434f0fc-b2b5-4cf7-a95e-d51ece32fc71",
+      "name": "Save Confirm"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Prepare Confirm').first().json.chat_id }}",
+        "text": "=Im not sure about this:\\nRp {{ Number($('Prepare Confirm').first().json.d.amount).toLocaleString('id-ID') }} | {{ $('Prepare Confirm').first().json.d.category }}\\n{{ $('Prepare Confirm').first().json.d.merchant }} | {{ $('Prepare Confirm').first().json.d.date }}\\nSave? (or type the nominal)",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "=Yes, Save the Callback Data: ",
+                    "additionalFields": {
+                      "callback_data": "=y|{{ $('Prepare Confirm').first().json.conf_id }}"
+                    }
+                  },
+                  {
+                    "text": "=No, Callback Data: ",
+                    "additionalFields": {
+                      "callback_data": "=n|{{ $('Prepare Confirm').first().json.conf_id }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1456,
+        96
+      ],
+      "id": "76a699e0-8710-4abc-9c10-e18ba37779a6",
+      "name": "Ask Confirm",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Prepare Confirm').first().json.chat_id }}",
+        "text": "I can't read this transaction, please send a clearer photo or you can type like kopi : 25 ribu",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1472,
+        304
+      ],
+      "id": "3609428d-8142-4322-b024-cf1c122b5a98",
+      "name": "Say Unreadable",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_ME",
+          "mode": "list",
+          "cachedResultName": "fin_queue"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "=id",
+              "keyValue": "={{ $('Prepare Confirm').first().json.queue_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "done"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "update_id",
+              "displayName": "update_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "kind",
+              "displayName": "kind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "payload",
+              "displayName": "payload",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "attempts",
+              "displayName": "attempts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1712,
+        208
+      ],
+      "id": "7c0bf35e-dfeb-47b5-9b69-51488d25afcb",
+      "name": "Mark Done (confirm)"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -160
+      ],
+      "id": "9a726a1f-c5fe-4df3-b0e2-4dcfa96bde09",
+      "name": "Entry"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $json.spreadsheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "transactions",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "src_id",
+              "lookupValue": "={{ $(\"Parse and Validate\").isExecuted ? $(\"Parse and Validate\").item.json.update_id : $(\"Start\").item.json.update_id }}"
+            },
+            {
+              "lookupColumn": "ref_no",
+              "lookupValue": "={{ $(\"Parse and Validate\").isExecuted ? ($(\"Parse and Validate\").item.json.d?.ref_no || 'NO-REF-' + $(\"Parse and Validate\").item.json.update_id) : ($(\"Start\").item.json.d?.ref_no || 'NO-REF-' + $(\"Start\").item.json.update_id) }}"
+            }
+          ]
+        },
+        "combineFilters": "OR",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        256,
+        -160
+      ],
+      "id": "f9b1d5be-a905-47cd-8cbb-63a6cd259068",
+      "name": "Find Duplicate",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "REPLACE_ME",
+          "name": "googleApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ctx = $('Entry').first().json;const hits = $input.all().map(i => i.json).filter(r => r.txn_id && r.status !== 'void');return [{ json: { ...ctx, dup: hits.length ? hits[0] : null } }]; "
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -160
+      ],
+      "id": "a4830bd7-4f6c-417b-a8c4-fdef5fd6caf0",
+      "name": "Merge Dup Result"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e3a93e82-e8f8-4e68-bfee-1367471329df",
+              "leftValue": "={{ !!$json.dup }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        720,
+        -160
+      ],
+      "id": "f25e6587-68a2-4682-ae06-264a70dcf962",
+      "name": "Is Duplicate?"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "=Already Recorded as #{{ $json.dup.txn_id }} (Rp {{ Number($json.dup.amount).toLocaleString('id-ID') }}, {{ $json.dup.txn_date }}). not recorded again",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        832,
+        -384
+      ],
+      "id": "1b4c73d7-b4a2-4cf8-8846-64684c205809",
+      "name": "Dup Notice",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_ME",
+          "mode": "list",
+          "cachedResultName": "fin_queue"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "=id",
+              "keyValue": "={{ $('Entry').first().json.queue_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "done"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "update_id",
+              "displayName": "update_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "kind",
+              "displayName": "kind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "payload",
+              "displayName": "payload",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "attempts",
+              "displayName": "attempts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        944,
+        -560
+      ],
+      "id": "8f522e10-24b3-416b-8be4-a22de40a5d12",
+      "name": "Mark Done (dup)",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "=YOUR_SPREADSHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "transactions",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "txn_id": "={{ $json.txn_id }}",
+            "created_at": "={{ $now.setZone('Asia/Makassar').toFormat('yyyy-MM-dd HH:mm:ss') }}",
+            "txn_date": "={{ $json.d.date }}",
+            "who": "={{ $json.who }}",
+            "type": "={{ $json.d.type }}",
+            "amount": "={{ $json.d.amount }}",
+            "category": "={{ $json.d.category }}",
+            "merchant": "={{ $json.d.merchant }}",
+            "notes": "={{ $json.d.notes }}",
+            "source": "={{ $json.kind }}",
+            "status": "ok",
+            "ref_no": "={{ $json.d.ref_no }}",
+            "confidence": "={{ $json.conf }}",
+            "model": "={{ $json.model }}",
+            "src_id": "={{ $json.update_id }}",
+            "tg_chat_id": "={{ $json.chat_id }}",
+            "tg_message_id": "={{ $json.message_id }}",
+            "image_path": "={{ $json.image_path }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "txn_id",
+              "displayName": "txn_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "txn_date",
+              "displayName": "txn_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "who",
+              "displayName": "who",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "type",
+              "displayName": "type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "amount",
+              "displayName": "amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "merchant",
+              "displayName": "merchant",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ref_no",
+              "displayName": "ref_no",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "model",
+              "displayName": "model",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "src_id",
+              "displayName": "src_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tg_chat_id",
+              "displayName": "tg_chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tg_message_id",
+              "displayName": "tg_message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "image_path",
+              "displayName": "image_path",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "edited_at",
+              "displayName": "edited_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "void_at",
+              "displayName": "void_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        992,
+        -144
+      ],
+      "id": "012bd71b-55cb-4a4c-983c-d27899f21097",
+      "name": "Append row",
+      "credentials": {
+        "googleApi": {
+          "id": "REPLACE_ME",
+          "name": "googleApi"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $('Merge Dup Result').first().json }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1232,
+        -160
+      ],
+      "id": "609dbc14-969c-43a5-af2f-4c0dd07d4b90",
+      "name": "Restore Context"
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $json;\nconst esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst rp = n => 'Rp ' + Number(n).toLocaleString('id-ID');\nlet text = `✓ <b>${rp(j.d.amount)}</b> · ${esc(j.d.category)}\\n`\n + `${esc(j.d.merchant || '-')} · ${j.d.date} · oleh ${esc(j.who)}\\n`\n + `ID: <code>${j.txn_id}</code>`;\nif (j.d.type === 'income') text += '\\n(pemasukan)';\nif (j.d.notes) text += `\\nCatatan: ${esc(j.d.notes)}`;\nreturn [{ json: { ...j, reply_text: text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        -160
+      ],
+      "id": "27d97788-d48c-4455-8945-9a8e4c3a8534",
+      "name": "Format Reply"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_ME",
+          "mode": "list",
+          "cachedResultName": "fin_queue"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "=id",
+              "keyValue": "={{ $('Format Reply').first().json.queue_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "done"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "update_id",
+              "displayName": "update_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "kind",
+              "displayName": "kind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "payload",
+              "displayName": "payload",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "attempts",
+              "displayName": "attempts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        -160
+      ],
+      "id": "9d60643b-5f0a-4122-8fe8-7a2d447ac816",
+      "name": "Mark Done",
+      "alwaysOutputData": true,
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Format Reply').first().json.chat_id }}",
+        "text": "={{ $('Format Reply').first().json.reply_text }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "=↩ Undo ",
+                    "additionalFields": {
+                      "callback_data": "=u|{{ $('Format Reply').first().json.txn_id }}"
+                    }
+                  },
+                  {
+                    "text": "=Change Category : ",
+                    "additionalFields": {
+                      "callback_data": "=m|{{ $('Format Reply').first().json.txn_id }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2000,
+        -160
+      ],
+      "id": "2eab97f2-29dc-4544-b86c-27eaed53e218",
+      "name": "Send Reply",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_ME",
+          "mode": "list",
+          "cachedResultName": "fin_queue"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "=id",
+              "keyValue": "={{ $('Start').first().json.queue_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "attempts": "={{ Number($('Start').first().json.attempts || 0) + 1 }}",
+            "last_error": "={{ JSON.stringify($json).slice(0, 200) }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "update_id",
+              "displayName": "update_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "kind",
+              "displayName": "kind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "payload",
+              "displayName": "payload",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "attempts",
+              "displayName": "attempts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -352,
+        -672
+      ],
+      "id": "01fc988f-1193-44ee-b4cd-6094490e70a8",
+      "name": "Bump Attempts",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "217aa525-2176-41e5-af7f-790036a06460",
+              "leftValue": "={{ !$('Start').first().json.from_queue && !$('Start').first().json.confirmed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -96,
+        -672
+      ],
+      "id": "daf53dbb-fd19-408d-ae0d-d3b5c55fbf1d",
+      "name": "Notify Queued?"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Start').first().json.chat_id }}",
+        "text": "there is a problem connection, transaction is already queue, DO NOT RESEND!!!",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        144,
+        -688
+      ],
+      "id": "421d4de7-7fbb-466f-80fb-310b8cffc65e",
+      "name": "Queued Notice",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Config').first().json.admin_chat_id }}",
+        "text": "=FIN-02 gagal memproses antrian #{{ $('Start').first().json.queue_id }} (percobaan {{ $('Bump Attempts').first().json.attempts }}): {{ $('Bump Attempts').first().json.last_error }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        384,
+        -688
+      ],
+      "id": "08000f98-46e6-4601-a00c-e0e65ca259ab",
+      "name": "Alert Admin",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c3915ce5-940c-428e-8684-5065f15acc2e",
+              "leftValue": "={{ $json.confirmed === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -304,
+        -144
+      ],
+      "id": "68fada9b-d5d4-489a-a296-01ed66822956",
+      "name": "Confirmed?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $json;\nconst payload = { update_id: j.update_id, chat_id: j.chat_id, user_id: j.user_id, who: j.who,\n message_id: j.message_id, kind: j.kind, image_path: j.image_path, queue_id: j.queue_id,\n model: j.model, d: j.d, conf: j.conf, txn_id: j.txn_id };\nconst readable = !!(j.d && Number.isInteger(j.d.amount) && j.d.amount > 0 && j.d.is_transaction !== false);\nreturn [{ json: { ...j, readable, conf_id: j.txn_id, payload_str: JSON.stringify(payload) } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1072,
+        448
+      ],
+      "id": "0cc80ad8-b543-498c-b95f-8ec218b10a39",
+      "name": "Prepare Confirm"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Confirmed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Model": {
+      "main": [
+        [
+          {
+            "node": "Is Image?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Image?": {
+      "main": [
+        [
+          {
+            "node": "Get Image",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Image": {
+      "main": [
+        [
+          {
+            "node": "Save Image",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bump Attempts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Request": {
+      "main": [
+        [
+          {
+            "node": "Call Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Claude": {
+      "main": [
+        [
+          {
+            "node": "Parse and Validate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bump Attempts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse and Validate": {
+      "main": [
+        [
+          {
+            "node": "OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OK?": {
+      "main": [
+        [
+          {
+            "node": "Entry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Can Escalate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Can Escalate?": {
+      "main": [
+        [
+          {
+            "node": "Switch to Sonnet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Readable?": {
+      "main": [
+        [
+          {
+            "node": "Save Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Say Unreadable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Confirm": {
+      "main": [
+        [
+          {
+            "node": "Ask Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Say Unreadable": {
+      "main": [
+        [
+          {
+            "node": "Mark Done (confirm)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Confirm": {
+      "main": [
+        [
+          {
+            "node": "Mark Done (confirm)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entry": {
+      "main": [
+        [
+          {
+            "node": "Find Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Merge Dup Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Dup Result": {
+      "main": [
+        [
+          {
+            "node": "Is Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Dup Notice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dup Notice": {
+      "main": [
+        [
+          {
+            "node": "Mark Done (dup)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row": {
+      "main": [
+        [
+          {
+            "node": "Restore Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bump Attempts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore Context": {
+      "main": [
+        [
+          {
+            "node": "Format Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Reply": {
+      "main": [
+        [
+          {
+            "node": "Mark Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Done": {
+      "main": [
+        [
+          {
+            "node": "Send Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bump Attempts": {
+      "main": [
+        [
+          {
+            "node": "Notify Queued?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Queued?": {
+      "main": [
+        [
+          {
+            "node": "Queued Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Queued Notice": {
+      "main": [
+        [
+          {
+            "node": "Alert Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmed?": {
+      "main": [
+        [
+          {
+            "node": "Entry",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch to Sonnet": {
+      "main": [
+        [
+          {
+            "node": "Set Model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Confirm": {
+      "main": [
+        [
+          {
+            "node": "Is Readable?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": []
+}

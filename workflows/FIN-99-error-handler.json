@@ -1,0 +1,290 @@
+{
+  "name": "FIN-99 Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -848,
+        144
+      ],
+      "id": "76ac61af-7072-46cb-b08c-f08b5a834f39",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n \"allowed_user_ids\": [111111111, 222222222],\n \"group_chat_id\": -1001234567890,\n \"admin_chat_id\": 111111111,\n \"spreadsheet_id\": \"YOUR_SPREADSHEET_ID\",\n \"model_default\": \"claude-haiku-5-5\",\n \"model_fallback\": \"claude-sonnet-5-5\",\n \"categories\": [\"Makanan & Minuman\", \"Belanja Harian\", \"Transport\", \"Tagihan & Utilitas\",\n \"Rumah Tangga\", \"Kesehatan\", \"Pendidikan\", \"Hiburan\", \"Keluarga & Sosial\",\n \"Cicilan & Hutang\", \"Tabungan & Investasi\", \"Pendapatan\", \"Lainnya\"]\n}",
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -672,
+        16
+      ],
+      "id": "b0505c66-5650-43ec-aa94-360ec8a1c222",
+      "name": "Config"
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $('Error Trigger').first().json;\nconst wf = e.workflow?.name || '?';\nconst node = e.execution?.lastNodeExecuted || '?';\nconst msg = String(e.execution?.error?.message || e.trigger?.error?.message || 'unknown').slice(0, 300);\nconst esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nreturn [{ json: { key: wf + '|' + node,\n text: `<b>n8n error</b>\\nWorkflow: ${esc(wf)}\\nNode: ${esc(node)}\\n${esc(msg)}\\n`\n + (e.execution?.url || '') } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -528,
+        -96
+      ],
+      "id": "3b9e7104-2b04-4f50-ad71-530e4e25da11",
+      "name": "Format Error"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_ME",
+          "mode": "list",
+          "cachedResultName": "fin_errors"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyValue": "={{ $json.key }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -368,
+        -192
+      ],
+      "id": "5c2f9fce-4b86-4077-80e5-0cd0c15b9069",
+      "name": "Get Last Alert",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "language": "pythonNative",
+        "pythonCode": "const e = $('Format Error').first().json;\nconst row = $input.all().map(i => i.json).find(r => r.key === e.key);\nconst recent = row && row.last_sent && (Date.now() - new Date(row.last_sent).getTime() < 30 * 60 * 1000);\nreturn [{ json: { ...e, send: !recent } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        -288
+      ],
+      "id": "e2aad052-9258-4137-aeec-7cdec6f69135",
+      "name": "Should End"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "676654a7-7b7f-4b55-af92-feb1ef477c40",
+              "leftValue": false,
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -64,
+        -368
+      ],
+      "id": "1350436b-0a6a-4fbc-8e42-2f484e894e0f",
+      "name": "Send?"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_ME",
+          "mode": "list",
+          "cachedResultName": "fin_errors"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyValue": "={{ $json.key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "key": "={{ $json.key }}",
+            "last_sent": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "key",
+              "displayName": "key",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_sent",
+              "displayName": "last_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        96,
+        -416
+      ],
+      "id": "85830418-cc09-46fa-84e8-eaf8d55c23d5",
+      "name": "Save Alert Time"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Config').first().json.admin_chat_id }}",
+        "text": "={{ $('Format Error').first().json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        272,
+        -480
+      ],
+      "id": "b42e3dfc-e2bc-47bd-82e0-2c4eec05454d",
+      "name": "Send Admin Alert",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Format Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Error": {
+      "main": [
+        [
+          {
+            "node": "Get Last Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Last Alert": {
+      "main": [
+        [
+          {
+            "node": "Should End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should End": {
+      "main": [
+        [
+          {
+            "node": "Send?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send?": {
+      "main": [
+        [
+          {
+            "node": "Save Alert Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Alert Time": {
+      "main": [
+        [
+          {
+            "node": "Send Admin Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {},
+  "nodeGroups": []
+}

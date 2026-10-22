@@ -1,0 +1,11 @@
+{
+  "allowed_user_ids": [111111111, 222222222],
+  "group_chat_id": -1001234567890,
+  "admin_chat_id": 111111111,
+  "spreadsheet_id": "YOUR_SPREADSHEET_ID",
+  "model_default": "claude-haiku-5-5",
+  "model_fallback": "claude-sonnet-5-5",
+  "categories": ["Makanan & Minuman", "Belanja Harian", "Transport", "Tagihan & Utilitas",
+    "Rumah Tangga", "Kesehatan", "Pendidikan", "Hiburan", "Keluarga & Sosial",
+    "Cicilan & Hutang", "Tabungan & Investasi", "Pendapatan", "Lainnya"]
+}

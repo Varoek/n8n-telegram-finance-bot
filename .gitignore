@@ -1,0 +1,21 @@
+# secrets and local values (never commit)
+.env
+*.env
+.sanitize-map.json
+exports-raw/
+workflows-private/
+*.pem
+*.key
+service-account*.json
+*credentials*.json
+
+# n8n local data
+.n8n/
+
+# editors / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+__pycache__/
+*.pyc

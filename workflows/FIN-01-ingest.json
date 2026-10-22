@@ -1,0 +1,2938 @@
+{
+  "name": "FIN-01 Ingest",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "callback_query",
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -2064,
+        336
+      ],
+      "id": "cbca52f0-1c39-47e9-9de5-41f821673c47",
+      "name": "Telegram Trigger",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n \"allowed_user_ids\": [111111111, 222222222],\n \"group_chat_id\": -1001234567890,\n \"admin_chat_id\": 111111111,\n \"spreadsheet_id\": \"YOUR_SPREADSHEET_ID\",\n \"model_default\": \"claude-haiku-5-5\",\n \"model_fallback\": \"claude-sonnet-5-5\",\n \"categories\": [\"Makanan & Minuman\", \"Belanja Harian\", \"Transport\", \"Tagihan & Utilitas\",\n \"Rumah Tangga\", \"Kesehatan\", \"Pendidikan\", \"Hiburan\", \"Keluarga & Sosial\",\n \"Cicilan & Hutang\", \"Tabungan & Investasi\", \"Pendapatan\", \"Lainnya\"]\n}",
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -1952,
+        128
+      ],
+      "id": "a6d1e6d1-bd3d-46a7-b27f-3b24ee78735b",
+      "name": "Config"
+    },
+    {
+      "parameters": {
+        "jsCode": "const u = $input.first().json;\nconst m = u.message || null;\nconst cb = u.callback_query || null;\nconst src = cb ? cb.message : m;\nconst from = cb ? cb.from : (m ? m.from : {});\nconst photo = m && m.photo ? m.photo[m.photo.length - 1] : null; // largest size\nconst isImg = d => d && /^image\\/(jpeg|png|webp)$/.test(d.mime_type || '');\nconst doc = m && isImg(m.document) ? m.document : null;\nconst text = m && m.text ? m.text.trim() : '';\nreturn [{ json: {\n update_id: u.update_id,\n chat_id: src ? src.chat.id : null,\n user_id: from.id,\n who: from.first_name || from.username || String(from.id),\n message_id: src ? src.message_id : null,\n text,\n caption: m && m.caption ? m.caption.trim() : '',\n file_id: photo ? photo.file_id : (doc ? doc.file_id : null),\n mime: doc ? doc.mime_type : 'image/jpeg',\n callback_id: cb ? cb.id : null,\n callback_data: cb ? cb.data : null,\n kind: cb ? 'callback' : (photo || doc) ? 'image' : text.startsWith('/') ? 'command' : text ? 'text' : 'other'\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1840,
+        -32
+      ],
+      "id": "e00dd8a2-7ad7-490c-9c65-8f47ce9f0f38",
+      "name": "Normalize"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "17d2f34a-f984-46b0-a1cf-9610675d7d88",
+              "leftValue": "={{ $('Config').first().json.allowed_user_ids.includes($json.user_id) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1680,
+        -32
+      ],
+      "id": "ae949179-9742-4723-8b70-580cce979f64",
+      "name": "Is Whitelisted?"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "callback",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "09d1683e-76aa-4e07-85be-5a968525c5e9"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "callback"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "de71db2f-7dfd-45c4-9c98-3216b81b66b4",
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "command",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "command"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "df42fa5f-5a4f-4373-b029-024834b7aaf1",
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "image",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "image"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "00d077e2-b640-4957-b776-bd4a29c4b0e9",
+                    "leftValue": "={{ $json.kind }}",
+                    "rightValue": "text",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "text"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -1424,
+        -80
+      ],
+      "id": "1a924596-001b-4bba-86e2-ab048825b0fb",
+      "name": "Route Kind"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_ME",
+          "mode": "list",
+          "cachedResultName": "fin_queue"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "update_id",
+              "keyValue": "={{ $json.update_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1408,
+        560
+      ],
+      "id": "f17621b8-0d31-45b0-a490-4f38dbdddd56",
+      "name": "Check Queue",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "46018790-620f-4a22-91af-ae3695840569",
+              "leftValue": "={{ $json.id === undefined }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1216,
+        560
+      ],
+      "id": "2d0623fc-de49-421e-b5ec-3cc9fc439138",
+      "name": "Is New?"
+    },
+    {
+      "parameters": {
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_ME",
+          "mode": "list",
+          "cachedResultName": "fin_queue"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "update_id": "={{ $('Normalize').first().json.update_id }}",
+            "kind": "={{ $('Normalize').first().json.kind }}",
+            "payload": "={{ JSON.stringify($('Normalize').first().json) }}",
+            "status": "pending",
+            "attempts": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "update_id",
+              "displayName": "update_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "kind",
+              "displayName": "kind",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "payload",
+              "displayName": "payload",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "attempts",
+              "displayName": "attempts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "last_error",
+              "displayName": "last_error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -928,
+        544
+      ],
+      "id": "eed1ba62-ecc4-419e-8ccd-f411fe3b91ff",
+      "name": "Insert Queue Row"
+    },
+    {
+      "parameters": {
+        "jsCode": "const n = $('Normalize').first().json;\nreturn [{ json: { ...n, queue_id: $json.id } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        544
+      ],
+      "id": "87686f4d-a204-4fc6-923a-d224438b76ef",
+      "name": "Prep Call"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "REPLACE_ME",
+          "mode": "list",
+          "cachedResultName": "FIN-02 Process Txn"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        -528,
+        544
+      ],
+      "id": "8a69839b-4a2c-480e-902e-9f58de9aa29a",
+      "name": "Run Process Txn",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const n = $input.first().json;\nconst arg = n.callback_data ? (n.txn_id || '') : (n.text.split(/\\s+/)[1] || '');\nreturn [{ json: { ...n, txn_id: String(arg).toUpperCase() } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1056,
+        -672
+      ],
+      "id": "b090203f-a64b-4939-9df4-c91b92412d27",
+      "name": "Undo Parse"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.text.split(/\\s+/)[0].split('@')[0].toLowerCase() }}",
+                    "rightValue": "/undo",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "73aa43ed-fc3e-45b6-9b17-8bc19d857987"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "undo"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "c9a5a6b1-e7bb-45bd-93d9-69f437e90bae",
+                    "leftValue": "={{ $json.text.split(/\\s+/)[0].split('@')[0].toLowerCase() }}",
+                    "rightValue": "/edit",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "edit"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "41229c8a-c6b0-42a6-9b60-0e284dc67f5b",
+                    "leftValue": "={{ $json.text.split(/\\s+/)[0].split('@')[0].toLowerCase() }}",
+                    "rightValue": "/last",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "last"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "5ab84070-aca9-43d3-b251-7b602abdcafe",
+                    "leftValue": "={{ $json.text.split(/\\s+/)[0].split('@')[0].toLowerCase() }}",
+                    "rightValue": "/summary",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "summary"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "87a844b3-2fbf-4ea0-b3ce-fcc40984c298",
+                    "leftValue": "={{ $json.text.split(/\\s+/)[0].split('@')[0].toLowerCase() }}",
+                    "rightValue": "/help",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "help"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "8a4f32bb-278e-4af3-bb73-bac262a69d70",
+                    "leftValue": "={{ $json.text.split(/\\s+/)[0].split('@')[0].toLowerCase() }}",
+                    "rightValue": "/start",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "start"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "other"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -1168,
+        -144
+      ],
+      "id": "3b0ee582-fc0b-485f-9ed6-7ff77fdfb9d8",
+      "name": "Route Command"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "=By ID: {{ $('Config').first().json.spreadsheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "transactions",
+          "mode": "name"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -864,
+        -672
+      ],
+      "id": "3d42873d-6db0-484a-9d04-b387988c9e96",
+      "name": "Undo Read Rows",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "REPLACE_ME",
+          "name": "googleApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const n = $('Undo Parse').first().json;\nconst rows = $input.all().map(i => i.json).filter(r => r.txn_id && r.status === 'ok');\nlet row;\nif (n.txn_id) row = rows.find(r => r.txn_id === n.txn_id);\nelse row = rows.filter(r => r.who === n.who)\n .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];\nreturn [{ json: { ...n, found: !!row, target: row || null } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -672,
+        -672
+      ],
+      "id": "c48c0535-fc17-4634-9fd3-5819bdbdea6f",
+      "name": "Undo Pick Row"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "991101f3-bc26-4916-92f3-78af38643a6b",
+              "leftValue": "={{ $json.found }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -496,
+        -672
+      ],
+      "id": "d0d3f7ab-9bae-4719-b2d3-e0fe6236798f",
+      "name": "Undo Found?"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "transactions",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "txn_id": "={{ $json.target.txn_id }}",
+            "status": "void",
+            "void_at": "={{ $now.setZone('Asia/Makassar').toFormat('yyyy-MM-dd HH:mm:ss') }}"
+          },
+          "matchingColumns": [
+            "txn_id"
+          ],
+          "schema": [
+            {
+              "id": "txn_id",
+              "displayName": "txn_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "txn_date",
+              "displayName": "txn_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "who",
+              "displayName": "who",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "type",
+              "displayName": "type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "amount",
+              "displayName": "amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "merchant",
+              "displayName": "merchant",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ref_no",
+              "displayName": "ref_no",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "model",
+              "displayName": "model",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "src_id",
+              "displayName": "src_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tg_chat_id",
+              "displayName": "tg_chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tg_message_id",
+              "displayName": "tg_message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "image_path",
+              "displayName": "image_path",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "edited_at",
+              "displayName": "edited_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "void_at",
+              "displayName": "void_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -384,
+        -864
+      ],
+      "id": "24a90670-0969-4f6e-aedc-ce409b041cd6",
+      "name": "Undo Void Row",
+      "credentials": {
+        "googleApi": {
+          "id": "REPLACE_ME",
+          "name": "googleApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Undo Pick Row').first().json.chat_id }}",
+        "text": "=Canceled: Rp {{ Number($('Undo Pick Row').first().json.target.amount).toLocaleString('id-ID') }} | {{ $('Undo Pick Row').first().json.target.category }} | {{ $('Undo Pick Row').first().json.target.merchant }} (ID {{ $('Undo Pick Row').first().json.target.txn_id }})",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -192,
+        -864
+      ],
+      "id": "820b309d-442b-4d7b-8c01-3443bbf87d41",
+      "name": "Undo Reply OK",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "Transactions not found or have been canceled. type /last to see the list",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -288,
+        -656
+      ],
+      "id": "d9a5e7b6-8316-43d6-aea9-51e34231f18f",
+      "name": "Undo Reply Not Found",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// \"/edit K3F9A kategori=Transport nominal=50000 catatan=parkir bandara\"\nconst n = $input.first().json;\nconst t = n.text.replace(/^\\/edit(@\\w+)?\\s*/i, '');\nconst id = (t.match(/^(\\w{5})\\b/) || [])[1];\nconst get = k => {\n const m = t.match(new RegExp(k + '=([^=]+?)(?=\\\\s+\\\\w+=|$)', 'i'));\n return m ? m[1].trim() : undefined;\n};\nconst nom = get('nominal');\nreturn [{ json: { ...n, txn_id: id && id.toUpperCase(), category: get('kategori'),\n amount: nom ? parseInt(nom.replace(/\\D/g, ''), 10) : undefined, notes: get('catatan') } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -976,
+        -416
+      ],
+      "id": "d9d87319-2ae5-47f1-ae73-c3f4d689da67",
+      "name": "Edit Parse"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "transactions",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -784,
+        -416
+      ],
+      "id": "a5defc7f-52ab-4a90-9451-2f51fe199ad1",
+      "name": "Edit Read Rows",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "REPLACE_ME",
+          "name": "googleApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const n = $('Edit Parse').first().json;\nconst cats = $('Config').first().json.categories;\nif (!n.txn_id) {\n return [{ json: { ...n, ok: false, msg: 'Format: /edit ID kategori=... nominal=... catatan=...' } }];\n}\nconst rows = $input.all().map(i => i.json);\nconst row = rows.find(r => r.txn_id === n.txn_id && r.status === 'ok');\nif (!row) return [{ json: { ...n, ok: false, msg: 'ID tidak ditemukan atau sudah dibatalkan.' } }];\nlet cat = row.category;\nif (n.category) {\n const hit = cats.find(c => c.toLowerCase() === n.category.toLowerCase());\n if (!hit) return [{ json: { ...n, ok: false, msg: 'Kategori tidak dikenal. Pilihan: ' + cats.join(', ') } }];\n cat = hit;\n}\nconst amount = n.amount && n.amount > 0 ? n.amount : Number(row.amount);\nconst notes = n.notes !== undefined ? n.notes : (row.notes || '');\nreturn [{ json: { ...n, ok: true, new_category: cat, new_amount: amount, new_notes: notes } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        -416
+      ],
+      "id": "907f9d7f-4e58-4dcc-940a-0b66591ecb7e",
+      "name": "Edit Merge"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f6e4356b-d940-4636-a037-bd6b0bf2eb48",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -336,
+        -416
+      ],
+      "id": "cf9fbcb5-5e06-4192-9802-2e1db8594dc8",
+      "name": "Edit OK?"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "transactions",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "txn_id": "={{ $json.txn_id }}",
+            "category": "={{ $json.new_category }}",
+            "amount": "={{ $json.new_amount }}",
+            "notes": "={{ $json.new_notes }}",
+            "edited_at": "={{ $now.setZone('Asia/Makassar').toFormat('yyyy-MM-dd HH:mm:ss') }}"
+          },
+          "matchingColumns": [
+            "txn_id"
+          ],
+          "schema": [
+            {
+              "id": "txn_id",
+              "displayName": "txn_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "txn_date",
+              "displayName": "txn_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "who",
+              "displayName": "who",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "type",
+              "displayName": "type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "amount",
+              "displayName": "amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "merchant",
+              "displayName": "merchant",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ref_no",
+              "displayName": "ref_no",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "model",
+              "displayName": "model",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "src_id",
+              "displayName": "src_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tg_chat_id",
+              "displayName": "tg_chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tg_message_id",
+              "displayName": "tg_message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "image_path",
+              "displayName": "image_path",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "edited_at",
+              "displayName": "edited_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "void_at",
+              "displayName": "void_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -112,
+        -496
+      ],
+      "id": "9052f646-15f9-4a09-a4b0-1e24d1d15b99",
+      "name": "Edit Update Row",
+      "credentials": {
+        "googleApi": {
+          "id": "REPLACE_ME",
+          "name": "googleApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Edit Merge').first().json.chat_id }}",
+        "text": "=Edited #{{ $('Edit Merge').first().json.txn_id }}: Rp {{ Number($('Edit Merge').first().json.new_amount).toLocaleString('id-ID') }} | {{ $('Edit Merge').first().json.new_category }} | {{ $('Edit Merge').first().json.new_notes }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        112,
+        -496
+      ],
+      "id": "5225f1f1-f501-4d0d-8034-0d87fd8cabf2",
+      "name": "Edit Reply OK",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.msg }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -96,
+        -320
+      ],
+      "id": "c69380b0-b394-40d7-b0ab-159dd3b54d5d",
+      "name": "Edit Reply Fail",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": " transactions",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -944,
+        -256
+      ],
+      "id": "63623e0a-ea62-4bf5-b600-690e6afeb501",
+      "name": "Last Read Rows",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "REPLACE_ME",
+          "name": "googleApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const n = $('Normalize').first().json;\nconst rows = $input.all().map(i => i.json).filter(r => r.txn_id && r.status === 'ok');\nrows.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));\nconst lines = rows.slice(0, 10).map(r =>\n `${r.txn_id} | ${r.txn_date} | Rp ${Number(r.amount).toLocaleString('id-ID')} | ${r.category}`\n + ` | ${r.merchant} | ${r.who}`);\nreturn [{ json: { chat_id: n.chat_id, text: lines.length ? lines.join('\\n') : 'Belum ada transaksi.' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -720,
+        -256
+      ],
+      "id": "8320c65d-d72b-4331-a2e7-7999e207e227",
+      "name": "Last Format"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -496,
+        -256
+      ],
+      "id": "9fa302ad-9644-4903-b3b7-80b66ffc40f7",
+      "name": "Last Send",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const n = $input.first().json;\nreturn [{ json: { ...n, mode: 'summary', arg: (n.text.split(/\\s+/)[1] || '') } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -848,
+        -64
+      ],
+      "id": "94c0c855-16d0-4575-87e2-b6e5a02953c2",
+      "name": "Summary Parse"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "REPLACE_ME",
+          "mode": "list",
+          "cachedResultName": "FIN-04 Report"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        -624,
+        -64
+      ],
+      "id": "46648ad9-b055-466c-9eb6-4c1edceffe1b",
+      "name": "Run Summary",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "=Cara pakai: \n- Kirim foto bukti transfer atau QRIS, atau ketik, contoh: kopi 25rb \n- Tambahkan keterangan (caption) pada foto bila perlu \n/undo : batalkan transaksi terakhir (atau /undo ID) \n/edit ID kategori=... nominal=... catatan=... \n/last : 10 transaksi terakhir \n/summary : ringkasan siklus berjalan (/summary lalu, /summary 2026-10)",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -928,
+        112
+      ],
+      "id": "99456b19-1e82-49d8-8fc3-1388e6abef7e",
+      "name": "Send Help",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const n = $input.first().json;\nconst [op, id, arg] = String(n.callback_data || '').split('|');\nreturn [{ json: { ...n, op, txn_id: id, arg } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1872,
+        -352
+      ],
+      "id": "72501d8a-24cb-4999-9641-e72c69027602",
+      "name": "Parse Callback"
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1648,
+        -352
+      ],
+      "id": "5d8cc8ba-3e97-4c86-b747-3b69ca441691",
+      "name": "Answer Callback",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.op }}",
+                    "rightValue": "u",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "e92b5930-a341-4fca-a856-c5c07166b92e"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "undo"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "00a8ad6b-3369-4ecb-912a-d9be3e9f21ae",
+                    "leftValue": "={{ $json.op }}",
+                    "rightValue": "m",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "menu"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "b91ae58e-92f7-42cf-a11f-c92cae740b5e",
+                    "leftValue": "={{ $json.op }}",
+                    "rightValue": "c",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "cat"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "482c8584-aa65-43b5-9f55-6b92729ebc6c",
+                    "leftValue": "={{ $json.op }}",
+                    "rightValue": "y",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "yes"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "7534132f-f95f-4841-9ad3-07ac8dde657e",
+                    "leftValue": "={{ $json.op }}",
+                    "rightValue": "n",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "no"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -1648,
+        -656
+      ],
+      "id": "8169b20a-bdca-4e44-bf12-d73d07ae856a",
+      "name": "Route Callback"
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $json.chat_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "replyMarkup": "inlineKeyboard",
+        "text": "=Pilih kategori baru untuk ID {{ $json.txn_id }}:",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Makanan & Minuman",
+                    "additionalFields": {
+                      "callback_data": "=c|{{ $json.txn_id }}|0"
+                    }
+                  },
+                  {
+                    "text": "Belanja Harian",
+                    "additionalFields": {
+                      "callback_data": "=c|{{ $json.txn_id }}|1"
+                    }
+                  },
+                  {
+                    "text": "Transport",
+                    "additionalFields": {
+                      "callback_data": "=c|{{ $json.txn_id }}|2"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Tagihan & Utilitas",
+                    "additionalFields": {
+                      "callback_data": "=c|{{ $json.txn_id }}|3"
+                    }
+                  },
+                  {
+                    "text": "Rumah Tangga",
+                    "additionalFields": {
+                      "callback_data": "=c|{{ $json.txn_id }}|4"
+                    }
+                  },
+                  {
+                    "text": "Kesehatan",
+                    "additionalFields": {
+                      "callback_data": "=c|{{ $json.txn_id }}|5"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Pendidikan",
+                    "additionalFields": {
+                      "callback_data": "=c|{{ $json.txn_id }}|6"
+                    }
+                  },
+                  {
+                    "text": "Hiburan",
+                    "additionalFields": {
+                      "callback_data": "=c|{{ $json.txn_id }}|7"
+                    }
+                  },
+                  {
+                    "text": "Keluarga & Sosial",
+                    "additionalFields": {
+                      "callback_data": "=c|{{ $json.txn_id }}|8"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "Cicilan & Hutang",
+                    "additionalFields": {
+                      "callback_data": "=c|{{ $json.txn_id }}|9"
+                    }
+                  },
+                  {
+                    "text": "Tabungan & Investasi",
+                    "additionalFields": {
+                      "callback_data": "=c|{{ $json.txn_id }}|10"
+                    }
+                  },
+                  {
+                    "text": "Pendapatan",
+                    "additionalFields": {
+                      "callback_data": "=c|{{ $json.txn_id }}|11"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "lainya",
+                    "additionalFields": {
+                      "callback_data": "=c|{{ $json.txn_id }}|12"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1824,
+        -816
+      ],
+      "id": "4b65b1fc-8d36-431a-988f-d510e99f9787",
+      "name": "Menu Edit",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheet_id }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "transactions",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -2016,
+        -960
+      ],
+      "id": "2ce086ce-c2e3-40f7-b811-7625298ace19",
+      "name": "Cat Read Rows",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "REPLACE_ME",
+          "name": "googleApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const n = $('Parse Callback').first().json;\nconst cats = $('Config').first().json.categories;\nconst cat = cats[Number(n.arg)];\nconst row = $input.all().map(i => i.json).find(r => r.txn_id === n.txn_id && r.status === 'ok');\nreturn [{ json: { ...n, ok: !!(row && cat), new_category: cat } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1792,
+        -960
+      ],
+      "id": "442b10be-458b-46a3-8995-1b667dc62a26",
+      "name": "Cat Merge"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ed964d9e-a361-4a1f-8a76-714ddfeda00b",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1568,
+        -960
+      ],
+      "id": "3fc63a40-5377-437d-8f69-a5891755b160",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "=https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "transactions",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "txn_id": "={{ $json.txn_id }}",
+            "category": "={{ $json.new_category }}",
+            "edited_at": "={{ $now.setZone('Asia/Makassar').toFormat('yyyy-MM-dd HH:mm:ss') }}"
+          },
+          "matchingColumns": [
+            "txn_id"
+          ],
+          "schema": [
+            {
+              "id": "txn_id",
+              "displayName": "txn_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "txn_date",
+              "displayName": "txn_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "who",
+              "displayName": "who",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "type",
+              "displayName": "type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "amount",
+              "displayName": "amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "merchant",
+              "displayName": "merchant",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "notes",
+              "displayName": "notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "ref_no",
+              "displayName": "ref_no",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "model",
+              "displayName": "model",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "src_id",
+              "displayName": "src_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tg_chat_id",
+              "displayName": "tg_chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "tg_message_id",
+              "displayName": "tg_message_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "image_path",
+              "displayName": "image_path",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "edited_at",
+              "displayName": "edited_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "void_at",
+              "displayName": "void_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1360,
+        -1088
+      ],
+      "id": "9acdf38f-65dc-491b-99c6-3ee2b621b91f",
+      "name": "Cat Update Row",
+      "credentials": {
+        "googleApi": {
+          "id": "REPLACE_ME",
+          "name": "googleApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $('Cat Merge').first().json.chat_id }}",
+        "messageId": "={{ $('Cat Merge').first().json.message_id }}",
+        "text": "=category changed: {{ $('Cat Merge').first().json.new_category }} (ID {{ $('Cat Merge').first().json.txn_id }})",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1152,
+        -1088
+      ],
+      "id": "d37d07af-80ef-4b08-bd80-12071d91e691",
+      "name": " Cat Edit Message",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_ME",
+          "mode": "list",
+          "cachedResultName": "fin_confirm"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "conf_id",
+              "keyValue": "={{ $json.txn_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1360,
+        -816
+      ],
+      "id": "51277d9c-8814-4ba6-82e0-1beea3b978c3",
+      "name": "Confirm Get",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const n = $('Parse Callback').first().json;\nconst row = $input.all().map(i => i.json).find(r => r.conf_id);\nif (!row) return [{ json: { ...n, found: false } }];\nconst p = JSON.parse(row.payload);\nreturn [{ json: { ...p, confirmed: true, found: true, cb_chat_id: n.chat_id,\ncb_message_id: n.message_id, conf_row_id: row.id } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1136,
+        -816
+      ],
+      "id": "6ea0ea0d-51a5-41d4-babb-5b3813317c0a",
+      "name": "Confirm Build"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "acbcc942-3c76-416a-ad94-45652cf3edd0",
+              "leftValue": "={{ $json.found }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -912,
+        -816
+      ],
+      "id": "7a6f5dc4-fae7-42dd-a68c-c7e3c43b2f33",
+      "name": "Confirm Found?"
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $json.cb_chat_id }}",
+        "messageId": "={{ $json.cb_message_id }}",
+        "text": "Confirmed, Saving...",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -688,
+        -912
+      ],
+      "id": "a6623120-ebcd-4cb9-8e7e-a59f430f6407",
+      "name": "Confirm Edit Message",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $('Confirm Build').first().json }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -576,
+        -1088
+      ],
+      "id": "1663b013-0bab-401f-b19d-0fd49b077eba",
+      "name": "Confirm Ctx"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "REPLACE_ME",
+          "mode": "list",
+          "cachedResultName": "FIN-02 Process Txn"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "position": [
+        -352,
+        -1088
+      ],
+      "id": "c97df3eb-fdf4-4fb2-8430-a617d91a348e",
+      "name": "Confirmed",
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_ME",
+          "mode": "list",
+          "cachedResultName": "fin_confirm"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyValue": "={{ $('Confirm Build').first().json.conf_row_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -48,
+        -1152
+      ],
+      "id": "ae1ad2b8-da32-4145-a9ec-5464ffefa902",
+      "name": "Confirm Delete"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Confirm Build').first().json.cb_chat_id }}",
+        "text": "failed to save, please resend the transaction",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -48,
+        -992
+      ],
+      "id": "b9353fe0-94b5-4d1f-998d-531da037b9eb",
+      "name": "Confirm Failed Notice",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $json.chat_id }}",
+        "messageId": "={{ $json.message_id }}",
+        "text": "droped",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1472,
+        -496
+      ],
+      "id": "5c940b36-20ce-4a3f-9492-67099648f14f",
+      "name": "Cancel Edit Message",
+      "credentials": {
+        "telegramApi": {
+          "id": "REPLACE_ME",
+          "name": "telegramApi"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_ME",
+          "mode": "list",
+          "cachedResultName": "fin_confirm"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "conf_id",
+              "keyValue": "={{ $('Parse Callback').first().json.txn_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -1248,
+        -496
+      ],
+      "id": "61653d6e-a1e8-4bbd-b6fb-7f5d01a3621e",
+      "name": "Delete row(s)"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Is Whitelisted?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is New?": {
+      "main": [
+        [
+          {
+            "node": "Insert Queue Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Whitelisted?": {
+      "main": [
+        [
+          {
+            "node": "Route Kind",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Kind": {
+      "main": [
+        [
+          {
+            "node": "Parse Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Route Command",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Queue",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Queue": {
+      "main": [
+        [
+          {
+            "node": "Is New?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Queue Row": {
+      "main": [
+        [
+          {
+            "node": "Prep Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Call": {
+      "main": [
+        [
+          {
+            "node": "Run Process Txn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Command": {
+      "main": [
+        [
+          {
+            "node": "Undo Parse",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Parse",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Last Read Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Summary Parse",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Help",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Help",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Help",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Undo Parse": {
+      "main": [
+        [
+          {
+            "node": "Undo Read Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Undo Read Rows": {
+      "main": [
+        [
+          {
+            "node": "Undo Pick Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Undo Pick Row": {
+      "main": [
+        [
+          {
+            "node": "Undo Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Undo Found?": {
+      "main": [
+        [
+          {
+            "node": "Undo Void Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Undo Reply Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Undo Void Row": {
+      "main": [
+        [
+          {
+            "node": "Undo Reply OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Parse": {
+      "main": [
+        [
+          {
+            "node": "Edit Read Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Read Rows": {
+      "main": [
+        [
+          {
+            "node": "Edit Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Merge": {
+      "main": [
+        [
+          {
+            "node": "Edit OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit OK?": {
+      "main": [
+        [
+          {
+            "node": "Edit Update Row",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Reply Fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Update Row": {
+      "main": [
+        [
+          {
+            "node": "Edit Reply OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Last Read Rows": {
+      "main": [
+        [
+          {
+            "node": "Last Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Last Format": {
+      "main": [
+        [
+          {
+            "node": "Last Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summary Parse": {
+      "main": [
+        [
+          {
+            "node": "Run Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Callback": {
+      "main": [
+        [
+          {
+            "node": "Answer Callback",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Route Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Callback": {
+      "main": [
+        [
+          {
+            "node": "Undo Parse",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Menu Edit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cat Read Rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Confirm Get",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cancel Edit Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cat Read Rows": {
+      "main": [
+        [
+          {
+            "node": "Cat Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cat Merge": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Cat Update Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cat Update Row": {
+      "main": [
+        [
+          {
+            "node": " Cat Edit Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Get": {
+      "main": [
+        [
+          {
+            "node": "Confirm Build",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Build": {
+      "main": [
+        [
+          {
+            "node": "Confirm Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Found?": {
+      "main": [
+        [
+          {
+            "node": "Confirm Edit Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Edit Message": {
+      "main": [
+        [
+          {
+            "node": "Confirm Ctx",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Ctx": {
+      "main": [
+        [
+          {
+            "node": "Confirmed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmed": {
+      "main": [
+        [
+          {
+            "node": "Confirm Delete",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Confirm Failed Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancel Edit Message": {
+      "main": [
+        [
+          {
+            "node": "Delete row(s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {},
+  "nodeGroups": []
+}

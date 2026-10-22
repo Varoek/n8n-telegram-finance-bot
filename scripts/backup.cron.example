@@ -1,0 +1,6 @@
+# Example host crontab (adjust paths). Weekly workflow export + pruning.
+# Credentials are encrypted inside the n8n volume: back that volume up as well (e.g. Proxmox backup).
+0 3 * * 0 cd /opt/n8n && docker compose exec -T n8n n8n export:workflow --all --output=/files/backups/wf-$(date +\%F).json
+30 3 * * 0 find /srv/finance-bot/backups -type f -mtime +60 -delete
+40 3 * * 0 find /srv/finance-bot/images  -type f -mtime +365 -delete
+# NOTE: exported workflows contain your real IDs. Keep them OUT of git; publish only sanitized copies.
